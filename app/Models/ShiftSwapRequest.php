@@ -11,6 +11,7 @@ class ShiftSwapRequest extends Model
     use HasFactory;
 
     public const STATUS_PENDING_TARGET = 'pending_target';
+    public const STATUS_PENDING_KADIV = 'pending_kadiv';
     public const STATUS_APPROVED = 'approved';
     public const STATUS_REJECTED = 'rejected';
     public const STATUS_CANCELLED = 'cancelled';
@@ -64,6 +65,11 @@ class ShiftSwapRequest extends Model
     public function isPendingTarget(): bool
     {
         return $this->status === self::STATUS_PENDING_TARGET;
+    }
+
+    public function isPendingKadiv(): bool
+    {
+        return $this->status === self::STATUS_PENDING_KADIV;
     }
 
     public function isFinal(): bool

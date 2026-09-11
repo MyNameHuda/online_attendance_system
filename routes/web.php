@@ -16,6 +16,7 @@ use App\Http\Controllers\Auth\LogoutController;
 use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DayOffSwapRequestController;
+use App\Http\Controllers\Kadiv\ApprovalController;
 use App\Http\Controllers\Kadiv\AttendanceController as KadivAttendanceController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ShiftSwapRequestController;
@@ -62,12 +63,14 @@ Route::middleware('auth')->group(function () {
     Route::resource('day-off-swaps', DayOffSwapRequestController::class)->only(['index', 'create', 'store', 'show']);
     Route::post('/day-off-swaps/{dayOffSwap}/cancel', [DayOffSwapRequestController::class, 'cancel'])->name('day-off-swaps.cancel');
 
-    // Kadiv approval workflow sudah dihapus — swap features sekarang auto-approve begitu target ACC.
-
-    // KD: lihat absensi anggota divisi sendiri
+    // KD: lihat absensi anggota divisi sendiri + approval swap
     Route::middleware('role:kepala_divisi')->prefix('kadiv')->name('kadiv.')->group(function () {
         Route::get('/attendances', [KadivAttendanceController::class, 'index'])->name('attendances.index');
         Route::get('/attendances/{attendance}', [KadivAttendanceController::class, 'show'])->name('attendances.show');
+
+        Route::get('/approvals', [ApprovalController::class, 'index'])->name('approvals.index');
+        Route::get('/approvals/{swapType}/{id}', [ApprovalController::class, 'show'])->name('approvals.show');
+        Route::post('/approvals/{swapType}/{id}/decide', [ApprovalController::class, 'decide'])->name('approvals.decide');
     });
 
     // Admin only

@@ -7,6 +7,7 @@ require __DIR__ . '/../../vendor/autoload.php';
 $app = require __DIR__ . '/../../bootstrap/app.php';
 $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 
+use App\Http\Controllers\Kadiv\ApprovalController as KadivApprovalController;
 use App\Http\Controllers\ShiftSwapRequestController;
 use App\Models\Schedule;
 use App\Models\Shift;
@@ -106,8 +107,8 @@ check("Status: pending_target", $swap?->status === 'pending_target');
 check("requester_shift_id = Andi shift", $swap?->requester_shift_id === $andiShiftId);
 check("target_shift_id = Hendra shift", $swap?->target_shift_id === $hendraShiftId);
 
-// 5. Hendra ACC — sekarang auto-approved & auto-swap (tidak ada tahap KD lagi)
-echo "\n--- 4. Hendra ACC (auto-approve + auto-swap) ---\n";
+// 5. Hendra ACC — masuk tahap approval KD (bukan auto-approved)
+echo "\n--- 4. Hendra ACC (masuk antrian KD) ---\n";
 $req2 = Request::create("/shift-swaps/{$swap->id}/target-respond", 'POST', [
     'decision' => 'accept',
     'note'     => 'OK bisa, saya swap.',
@@ -118,10 +119,31 @@ $req2->setUserResolver(fn () => $hendra);
 $resp2 = $ctrl->targetRespond($req2, $swap);
 check("Response 302", $resp2->getStatusCode() === 302);
 $swap->refresh();
-check("Status: approved (langsung, skip KD)", $swap->status === 'approved');
+check("Status: pending_kadiv (menunggu KD)", $swap->status === 'pending_kadiv');
 check("target_responded_at ter-set", $swap->target_responded_at !== null);
-check("approver_id = Hendra (auto)", $swap->approver_id === $hendra->id);
+check("approver_id masih NULL (belum di-approve KD)", $swap->approver_id === null);
+check("approver_decided_at masih NULL", $swap->approver_decided_at === null);
+
+// 5b. KD Budi (IT) approve swap → status approved + auto-swap applied
+echo "\n--- 5. KD Budi approve (final approval) ---\n";
+$budi = User::where('email', 'budi.kadiv@attendance.test')->first();
+check("Budi (KD IT) exists", $budi !== null, "(id={$budi?->id})");
+check("Budi role = kepala_divisi", $budi?->role === 'kepala_divisi');
+check("Budi division_id = Andi division_id (IT)", $budi?->division_id === $andi->division_id);
+
+$kadivCtrl = new KadivApprovalController();
+$reqK = Request::create("/kadiv/approvals/shift/{$swap->id}/decide", 'POST', [
+    'decision' => 'approve',
+    'note'     => 'Disetujui, silakan tukar shift.',
+]);
+$reqK->setUserResolver(fn () => $budi);
+$respK = $kadivCtrl->decide($reqK, 'shift', $swap->id);
+check("Response 302", $respK->getStatusCode() === 302);
+$swap->refresh();
+check("Status: approved (setelah KD ACC)", $swap->status === 'approved');
+check("approver_id = Budi", $swap->approver_id === $budi->id);
 check("approver_decided_at ter-set", $swap->approver_decided_at !== null);
+check("approver_response_note tersimpan", $swap->approver_response_note === 'Disetujui, silakan tukar shift.');
 
 // 6. Verify schedule swap: Andi dapat shift Hendra, Hendra dapat shift Andi
 echo "\n--- 6. Schedule swap verification ---\n";

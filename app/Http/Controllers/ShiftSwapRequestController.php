@@ -85,6 +85,7 @@ class ShiftSwapRequestController extends Controller
         // Cek tidak ada request aktif di tanggal yang sama
         $existsActive = ShiftSwapRequest::whereIn('status', [
             ShiftSwapRequest::STATUS_PENDING_TARGET,
+            ShiftSwapRequest::STATUS_PENDING_KADIV,
         ])->where('date', $date)
           ->where(function ($q) use ($user, $target) {
               $q->where('requester_id', $user->id)
@@ -164,42 +165,40 @@ class ShiftSwapRequestController extends Controller
         ]);
 
         if ($data['decision'] === 'accept') {
-            // Auto-approve & auto-apply swap. Tidak ada tahap KD lagi.
-            // approver_id disimpan sebagai target user_id untuk audit trail (siapa yang "menyetujui" via ACC).
-            DB::transaction(function () use ($shiftSwap, $user, $data) {
-                Schedule::where('user_id', $shiftSwap->requester_id)
-                    ->whereDate('date', $shiftSwap->date)
-                    ->update(['shift_id' => $shiftSwap->target_shift_id]);
-
-                Schedule::where('user_id', $shiftSwap->target_employee_id)
-                    ->whereDate('date', $shiftSwap->date)
-                    ->update(['shift_id' => $shiftSwap->requester_shift_id]);
-
-                $shiftSwap->update([
-                    'status' => ShiftSwapRequest::STATUS_APPROVED,
-                    'target_responded_at' => now(),
-                    'target_response_note' => $data['note'] ?? null,
-                    'approver_id' => $user->id,
-                    'approver_decided_at' => now(),
-                    'approver_response_note' => $data['note'] ?? null,
-                ]);
-            });
-
-            AuditLog::log('shift_swap_auto_approved', $user->id, 'ShiftSwapRequest', $shiftSwap->id, [
-                'target_response' => 'accept',
-                'note' => $data['note'] ?? null,
+            // Target ACC → masuk tahap approval KD. Tidak auto-swap.
+            $shiftSwap->update([
+                'status' => ShiftSwapRequest::STATUS_PENDING_KADIV,
+                'target_responded_at' => now(),
+                'target_response_note' => $data['note'] ?? null,
             ]);
 
-            // Notify requester bahwa swap sudah final
+            AuditLog::log('shift_swap_target_accepted', $user->id, 'ShiftSwapRequest', $shiftSwap->id);
+
+            // Notify semua KD di divisi requester
+            $kadivs = User::where('role', User::ROLE_KADIV)
+                ->where('division_id', $shiftSwap->requester->division_id)
+                ->get();
+            foreach ($kadivs as $kd) {
+                NotificationService::send(
+                    $kd->id,
+                    'shift_swap.kadiv_review',
+                    'Pengajuan Tukar Shift Perlu Approval',
+                    "{$shiftSwap->requester->name} mengajukan tukar shift dengan {$shiftSwap->targetEmployee->name} untuk tanggal " . $shiftSwap->date->translatedFormat('d F Y') . ". Target sudah ACC.",
+                    route('kadiv.approvals.show', ['swapType' => 'shift', 'id' => $shiftSwap->id]),
+                    ['requester_name' => $shiftSwap->requester->name, 'date' => $shiftSwap->date->toDateString()]
+                );
+            }
+
+            // Notify requester bahwa target sudah ACC
             NotificationService::send(
                 $shiftSwap->requester_id,
-                'shift_swap.approved',
-                'Tukar Shift Disetujui',
-                "{$user->name} ACC pengajuan tukar shift Anda untuk tanggal " . $shiftSwap->date->translatedFormat('d F Y') . ". Shift sudah ditukar otomatis.",
-                route('shift-swaps.index')
+                'shift_swap.target_accepted',
+                'Target ACC Pengajuan',
+                "{$user->name} ACC pengajuan tukar shift Anda. Sekarang menunggu approval Kepala Divisi.",
+                route('shift-swaps.show', $shiftSwap)
             );
 
-            return redirect()->route('shift-swaps.index')->with('success', 'Pengajuan ACC. Shift otomatis ditukar!');
+            return redirect()->route('shift-swaps.index')->with('success', 'Anda ACC pengajuan. Sekarang menunggu approval Kepala Divisi.');
         } else {
             $shiftSwap->update([
                 'status' => ShiftSwapRequest::STATUS_REJECTED,

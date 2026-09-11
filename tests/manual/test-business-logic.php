@@ -100,7 +100,7 @@ if ($liburDate) {
     check("Hari libur terdeteksi", $liburSchedule->isLibur());
 }
 
-echo "\n=== FITUR 7: Tukar Shift (Auto-Approve by Target ACC) ===\n";
+echo "\n=== FITUR 7: Tukar Shift (2-Step Approval) ===\n";
 $citra = User::where('email', 'citra@attendance.test')->first();
 $dedi = User::where('email', 'dedi@attendance.test')->first();
 
@@ -141,8 +141,17 @@ if ($andiSched && $citraSched && $andiSched->isKerja() && $citraSched->isKerja()
     // Same-division check
     check("Andi & Citra satu divisi", $andi->division_id === $citra->division_id);
 
-    // Target ACC → langsung auto-approve & auto-swap (tidak ada tahap KD lagi)
-    DB::transaction(function () use ($swap) {
+    // Target ACC → masuk tahap approval KD
+    $swap->update([
+        'status' => ShiftSwapRequest::STATUS_PENDING_KADIV,
+        'target_responded_at' => now(),
+        'target_response_note' => 'OK',
+    ]);
+    check("Target ACC (status: pending_kadiv)", $swap->fresh()->status === 'pending_kadiv');
+
+    // KD approve → auto-swap
+    $kadiv = User::where('role', 'kepala_divisi')->where('division_id', $andi->division_id)->first();
+    DB::transaction(function () use ($swap, $kadiv) {
         Schedule::where('user_id', $swap->requester_id)
             ->whereDate('date', $swap->date)
             ->update(['shift_id' => $swap->target_shift_id]);
@@ -151,9 +160,7 @@ if ($andiSched && $citraSched && $andiSched->isKerja() && $citraSched->isKerja()
             ->update(['shift_id' => $swap->requester_shift_id]);
         $swap->update([
             'status' => ShiftSwapRequest::STATUS_APPROVED,
-            'target_responded_at' => now(),
-            'target_response_note' => 'OK',
-            'approver_id' => $swap->target_employee_id, // self-approved via ACC
+            'approver_id' => $kadiv->id,
             'approver_decided_at' => now(),
         ]);
     });
@@ -162,36 +169,45 @@ if ($andiSched && $citraSched && $andiSched->isKerja() && $citraSched->isKerja()
     $newCitraSched = Schedule::where('user_id', $citra->id)->whereDate('date', $swapDate)->first();
     check("Auto-swap: Andi dapat shift Citra", $newAndiSched->shift_id === $swap->target_shift_id);
     check("Auto-swap: Citra dapat shift Andi", $newCitraSched->shift_id === $swap->requester_shift_id);
-    check("Status approved (skip KD)", $swap->fresh()->status === 'approved');
-    check("Approver = target (auto-approved)", $swap->fresh()->approver_id === $citra->id);
+    check("Status approved", $swap->fresh()->status === 'approved');
+    check("Approver tercatat (KD IT)", $swap->fresh()->approver_id === $kadiv->id);
 } else {
     echo "  (skip — tanggal uji bukan hari kerja semua)\n";
 }
 
-echo "\n=== FITUR 8: Tukar Hari Libur ===\n";
+echo "\n=== FITUR 8: Tukar Hari Libur (KD Approval Required) ===\n";
 $liburDate = Schedule::where('user_id', $andi->id)->where('status', 'libur')->whereDate('date', '>=', today())->first()?->date;
 $kerjaDate = Schedule::where('user_id', $andi->id)->where('status', 'kerja')->whereDate('date', '>=', today())->where('date', '!=', $liburDate)->first()?->date;
 
 if ($liburDate && $kerjaDate) {
-    // Auto-approve flow: langsung apply schedule swap + status approved pada saat creation
-    DB::transaction(function () use ($andi, $liburDate, $kerjaDate, &$dayOffSwap) {
-        Schedule::where('user_id', $andi->id)
-            ->whereDate('date', $liburDate)
+    $dayOffSwap = DayOffSwapRequest::create([
+        'requester_id' => $andi->id,
+        'old_off_date' => $liburDate,
+        'new_off_date' => $kerjaDate,
+        'reason' => 'Ada acara keluarga',
+        'status' => 'pending',
+    ]);
+    check("Tukar libur created (status: pending)", $dayOffSwap->status === 'pending');
+
+    // Schedule belum berubah saat masih pending
+    $oldLibur = Schedule::where('user_id', $andi->id)->whereDate('date', $liburDate)->first();
+    check("Schedule belum berubah saat pending", $oldLibur->isLibur());
+
+    // KD approve → apply schedule swap
+    $kadiv = User::where('role', 'kepala_divisi')->where('division_id', $andi->division_id)->first();
+    DB::transaction(function () use ($dayOffSwap, $kadiv) {
+        Schedule::where('user_id', $dayOffSwap->requester_id)
+            ->whereDate('date', $dayOffSwap->old_off_date)
             ->update(['status' => 'kerja', 'shift_id' => null]);
-        Schedule::where('user_id', $andi->id)
-            ->whereDate('date', $kerjaDate)
+        Schedule::where('user_id', $dayOffSwap->requester_id)
+            ->whereDate('date', $dayOffSwap->new_off_date)
             ->update(['status' => 'libur', 'shift_id' => null]);
-        $dayOffSwap = DayOffSwapRequest::create([
-            'requester_id' => $andi->id,
-            'old_off_date' => $liburDate,
-            'new_off_date' => $kerjaDate,
-            'reason' => 'Ada acara keluarga',
+        $dayOffSwap->update([
             'status' => 'approved',
-            'approver_id' => $andi->id,
+            'approver_id' => $kadiv->id,
             'approver_decided_at' => now(),
         ]);
     });
-    check("Tukar libur created (auto-approved)", $dayOffSwap->status === 'approved');
 
     $newLibur = Schedule::where('user_id', $andi->id)->whereDate('date', $liburDate)->first();
     $newKerja = Schedule::where('user_id', $andi->id)->whereDate('date', $kerjaDate)->first();

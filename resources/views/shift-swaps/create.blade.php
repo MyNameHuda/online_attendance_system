@@ -56,7 +56,7 @@
             <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
                 <p class="text-xs font-semibold text-slate-700 mb-2 flex items-center gap-1.5">
                     <svg class="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                    Alur swap
+                    Alur approval
                 </p>
                 <ol class="space-y-1.5 text-xs text-slate-600">
                     <li class="flex items-start gap-2">
@@ -65,7 +65,11 @@
                     </li>
                     <li class="flex items-start gap-2">
                         <span class="w-5 h-5 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center flex-shrink-0 text-[10px] font-bold">2</span>
-                        <span>Target ACC → jadwal langsung ditukar otomatis ✓</span>
+                        <span>Target harus ACC dulu → status: <em>Pending KD</em></span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <span class="w-5 h-5 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center flex-shrink-0 text-[10px] font-bold">3</span>
+                        <span>Kepala Divisi approve → jadwal otomatis ditukar</span>
                     </li>
                 </ol>
             </div>

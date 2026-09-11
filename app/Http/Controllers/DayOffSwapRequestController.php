@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\AuditLog;
 use App\Models\DayOffSwapRequest;
 use App\Models\Schedule;
+use App\Models\User;
+use App\Services\NotificationService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -74,32 +76,32 @@ class DayOffSwapRequestController extends Controller
             return back()->withErrors(['new_off_date' => 'Tanggal baru harus hari kerja Anda.'])->withInput();
         }
 
-        // Auto-apply swap: old_off_date jadi kerja, new_off_date jadi libur.
-        // Tidak ada tahap approval KD lagi — tukar libur langsung final saat karyawan create.
-        $swap = null;
-        DB::transaction(function () use ($data, $user, &$swap) {
-            $swap = DayOffSwapRequest::create([
-                'requester_id' => $user->id,
-                'old_off_date' => $data['old_off_date'],
-                'new_off_date' => $data['new_off_date'],
-                'reason'       => $data['reason'],
-                'status'       => DayOffSwapRequest::STATUS_APPROVED,
-                'approver_id'  => $user->id, // self-approved (karyawan yang create)
-                'approver_decided_at' => now(),
-            ]);
+        // Buat pengajuan dengan status pending. Menunggu approval Kepala Divisi.
+        $swap = DayOffSwapRequest::create([
+            'requester_id' => $user->id,
+            'old_off_date' => $data['old_off_date'],
+            'new_off_date' => $data['new_off_date'],
+            'reason'       => $data['reason'],
+            'status'       => DayOffSwapRequest::STATUS_PENDING,
+        ]);
 
-            Schedule::where('user_id', $user->id)
-                ->whereDate('date', $data['old_off_date'])
-                ->update(['status' => Schedule::STATUS_KERJA, 'shift_id' => null]);
+        AuditLog::log('dayoff_swap_created', $user->id, 'DayOffSwapRequest', $swap->id);
 
-            Schedule::where('user_id', $user->id)
-                ->whereDate('date', $data['new_off_date'])
-                ->update(['status' => Schedule::STATUS_LIBUR, 'shift_id' => null]);
-        });
+        // Notify KD di divisi user
+        $kadivs = User::where('role', User::ROLE_KADIV)
+            ->where('division_id', $user->division_id)
+            ->get();
+        foreach ($kadivs as $kd) {
+            NotificationService::send(
+                $kd->id,
+                'dayoff_swap.new',
+                'Pengajuan Tukar Hari Libur',
+                "{$user->name} mengajukan tukar hari libur dari " . Carbon::parse($data['old_off_date'])->translatedFormat('d F') . " ke " . Carbon::parse($data['new_off_date'])->translatedFormat('d F') . ".",
+                route('kadiv.approvals.show', ['swapType' => 'dayoff', 'id' => $swap->id]),
+            );
+        }
 
-        AuditLog::log('dayoff_swap_auto_approved', $user->id, 'DayOffSwapRequest', $swap?->id);
-
-        return redirect()->route('day-off-swaps.index')->with('success', 'Tukar hari libur berhasil. Jadwal sudah langsung ditukar.');
+        return redirect()->route('day-off-swaps.index')->with('success', 'Pengajuan tukar hari libur berhasil dibuat. Menunggu approval Kepala Divisi.');
     }
 
     public function show(DayOffSwapRequest $dayOffSwap): View
