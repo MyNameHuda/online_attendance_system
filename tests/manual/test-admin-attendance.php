@@ -27,35 +27,34 @@ View::share('errors', new \Illuminate\Support\ViewErrorBag());
 
 echo "=== ADMIN ATTENDANCE VIEW TEST ===\n\n";
 
-// Setup: bikin attendance untuk Andi dengan foto dummy
+// Setup: bikin attendance untuk Andi dengan foto dummy (full clock-in + clock-out)
 $andi = User::where('email', 'andi@attendance.test')->first();
 $today = Carbon::today()->toDateString();
-$existingAtt = Attendance::where('user_id', $andi->id)->whereDate('date', $today)->first();
 
-if (!$existingAtt) {
-    $inPhoto  = 'attendance/' . $andi->id . '/test-in.jpg';
-    $outPhoto = 'attendance/' . $andi->id . '/test-out.jpg';
-    // Create dummy jpeg files in real storage
-    $jpg = base64_decode('/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AVoP/2Q==');
-    Storage::disk('public')->put($inPhoto, $jpg);
-    Storage::disk('public')->put($outPhoto, $jpg);
+// Hapus attendance existing untuk Andi hari ini agar bisa bikin fresh.
+// Test lain (test-business-logic.php) mungkin sudah create attendance tanpa clock-out.
+Attendance::where('user_id', $andi->id)->whereDate('date', $today)->delete();
 
-    $existingAtt = Attendance::create([
-        'user_id'         => $andi->id,
-        'date'            => $today,
-        'clock_in_time'   => now()->subHours(4),
-        'clock_in_photo'  => $inPhoto,
-        'clock_in_lat'    => -6.175392,
-        'clock_in_lng'    => 106.827153,
-        'clock_out_time'  => now()->subHours(1),
-        'clock_out_photo' => $outPhoto,
-        'clock_out_lat'   => -6.175500,
-        'clock_out_lng'   => 106.827200,
-    ]);
-    "Created test attendance #{$existingAtt->id}\n";
-} else {
-    "Using existing attendance #{$existingAtt->id}\n";
-}
+$inPhoto  = 'attendance/' . $andi->id . '/test-in.jpg';
+$outPhoto = 'attendance/' . $andi->id . '/test-out.jpg';
+// Create dummy jpeg files in real storage
+$jpg = base64_decode('/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AVoP/2Q==');
+Storage::disk('public')->put($inPhoto, $jpg);
+Storage::disk('public')->put($outPhoto, $jpg);
+
+$existingAtt = Attendance::create([
+    'user_id'         => $andi->id,
+    'date'            => $today,
+    'clock_in_time'   => now()->subHours(4),
+    'clock_in_photo'  => $inPhoto,
+    'clock_in_lat'    => -6.175392,
+    'clock_in_lng'    => 106.827153,
+    'clock_out_time'  => now()->subHours(1),
+    'clock_out_photo' => $outPhoto,
+    'clock_out_lat'   => -6.175500,
+    'clock_out_lng'   => 106.827200,
+]);
+echo "Created test attendance #{$existingAtt->id}\n";
 
 $controller = new AttendanceController();
 

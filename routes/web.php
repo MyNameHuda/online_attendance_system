@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\OfficeLocationController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\ScheduleController;
 use App\Http\Controllers\Admin\ShiftController;
+use App\Http\Controllers\Admin\SwapRequestController as AdminSwapRequestController;
 use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\Auth\ForgotPasswordController;
 use App\Http\Controllers\Auth\LoginController;
@@ -93,5 +94,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/reports/monthly', [ReportController::class, 'monthly'])->name('reports.monthly');
         Route::get('/reports/monthly/export', [ReportController::class, 'export'])->name('reports.export');
         Route::get('/audit-logs', [AuditLogController::class, 'index'])->name('audit-logs.index');
+
+        // Swap requests timeline (shift + dayoff, semua status)
+        Route::get('/swap-requests', [AdminSwapRequestController::class, 'index'])->name('swap-requests.index');
+        Route::get('/swap-requests/{swapType}/{id}', [AdminSwapRequestController::class, 'show'])->name('swap-requests.show');
     });
 });
