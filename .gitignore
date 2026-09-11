@@ -1,0 +1,68 @@
+# ============================================================
+# Laravel .gitignore — typical + project-specific overrides
+# Paths are relative to attendance-app/ (this directory is repo root)
+# ============================================================
+
+# Dependencies
+/vendor/
+/node_modules/
+
+# Environment
+.env
+.env.backup
+.env.production
+.env.staging
+
+# Laravel runtime
+/storage/logs/*.log
+/storage/framework/cache/data/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+/storage/debugbar/
+
+# Composer
+composer.phar
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# PHPUnit
+.phpunit.result.cache
+.phpunit.cache
+
+# ============================================================
+# Project-specific: orphan/cleanup files dari development
+# ============================================================
+# Debug placeholders
+/_debug.php
+
+# Orphan files from earlier iterations
+/_removed_*.php
+/_removed_*.ps1
+/_removed_*.log
+/app/Http/_removed_*.log
+/app/Http/Controllers/Kadiv/_removed_*.php
+/resources/views/admin/schedules/_removed_*.blade.php
+/resources/views/kadiv/approvals/_removed_*.blade.php
+/resources/views/kadiv/_removed_*.blade.php
+
+# Local database (regenerate dengan `php artisan migrate:fresh --seed`)
+/database/database.sqlite
+
+# Uploaded photos (regenerate dengan `php artisan storage:link`)
+/storage/app/public/attendance/*
+
+# Compiled Blade views (regenerated otomatis)
+/storage/framework/views/*.php
+
+# Local reports / log files
+/docs/_working/
