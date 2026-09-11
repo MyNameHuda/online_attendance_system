@@ -1,4 +1,1 @@
-import axios from 'axios';
-window.axios = axios;
-
-window.axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
+// REMOVED — Tidak ada Vite build. axios tidak digunakan (app ini tidak pakai AJAX global).

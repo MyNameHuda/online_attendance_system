@@ -5,7 +5,7 @@
 
 # Dependencies
 /vendor/
-/node_modules/
+# Note: no /node_modules/ karena project ini pakai Tailwind via CDN, bukan Vite/npm
 
 # Environment
 .env
